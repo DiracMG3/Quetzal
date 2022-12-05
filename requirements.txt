@@ -1,0 +1,4 @@
+qiskit==0.38.0
+qiskit-ignis==0.7.1
+kahypar==1.1.7
+temsornetwork==0.4.6

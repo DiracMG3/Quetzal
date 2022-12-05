@@ -1,0 +1,22 @@
+{
+    "sourceFile": "test.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 1,
+            "patches": [
+                {
+                    "date": 1670206204914,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1670206227220,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -25,9 +25,9 @@\n ##########################################################################################\r\n #circuit, cuts = build_circuit_with_cuts(circuit_type, layers, qubits, frag_num, seed)\r\n circ = random_circuit(20, 3, max_operands=2, seed = 23)\r\n circ = circ.decompose()\r\n-circ1 = QFT(15, approximation_degree=12, do_swaps=False)\r\n+circ1 = QFT(14, approximation_degree=11, do_swaps=False)\r\n circ1 = circ1.decompose()\r\n #circ1.draw('mpl')\r\n #plt.show()\r\n #cuts = [(Qubit(QuantumRegister(5, 'q'), 2),2),(Qubit(QuantumRegister(5, 'q'), 3),3)]\r\n"
+                }
+            ],
+            "date": 1670206204914,
+            "name": "Commit-0",
+            "content": "from qiskit import *\r\nfrom processor.processing_module import *\r\nfrom cutter.cutting_module import *\r\nfrom cutter.kahypar_cutter import *\r\nfrom processor.circuit_generator import *\r\nfrom qiskit.circuit import Qubit\r\nfrom qiskit.circuit.library import *\r\nimport matplotlib.pyplot as plt\r\nfrom qiskit.circuit.random import random_circuit\r\n\r\n\r\n\r\n# initial configurations\r\nsimulation_backend = \"qasm_simulator\"\r\nnum_shots = 10**6 # number of shots\r\ncut_constraint = {\"max_size_fragments\": 10, \r\n                  \"min_qubits\": 2,\r\n                  \"max_qubits\": 15,\r\n                  \"depth\": 100,\r\n                }\r\n\r\n\r\n##########################################################################################\r\n# test a circuit cutting task\r\n##########################################################################################\r\n#circuit, cuts = build_circuit_with_cuts(circuit_type, layers, qubits, frag_num, seed)\r\ncirc = random_circuit(20, 3, max_operands=2, seed = 23)\r\ncirc = circ.decompose()\r\ncirc1 = QFT(15, approximation_degree=12, do_swaps=False)\r\ncirc1 = circ1.decompose()\r\n#circ1.draw('mpl')\r\n#plt.show()\r\n#cuts = [(Qubit(QuantumRegister(5, 'q'), 2),2),(Qubit(QuantumRegister(5, 'q'), 3),3)]\r\ncuts = kahypar_cut(circ, 7, 0.88)\r\n#print(cuts)\r\n#print('len of cuts:')\r\n#print(len(cuts))\r\ntask1 = Circuit_Cutting_Task(circ, cuts, num_shots, simulation_backend)\r\n#problem = Optimal_Cut(circ,num_shots,cut_constraint,\"kahypar\")\r\n#print(problem.results)\r\n"
+        }
+    ]
+}

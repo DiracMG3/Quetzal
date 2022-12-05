@@ -1,0 +1,70 @@
+{
+    "sourceFile": "shadowQPT.py",
+    "activeCommit": 0,
+    "commits": [
+        {
+            "activePatchIndex": 13,
+            "patches": [
+                {
+                    "date": 1665387681109,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n"
+                },
+                {
+                    "date": 1665387697121,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,3 +1,3 @@\n import numpy as np\r\n import matplotlib.pyplot as plt\r\n-import qiskit\n\\ No newline at end of file\n+import qiskit\r\n"
+                },
+                {
+                    "date": 1665387706912,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,3 +1,16 @@\n import numpy as np\r\n import matplotlib.pyplot as plt\r\n import qiskit\r\n+\r\n+pauli_list = [\r\n+    np.eye(2),\r\n+    np.array([[0.0, 1.0], [1.0, 0.0]]),\r\n+    np.array([[0, -1.0j], [1.0j, 0.0]]),\r\n+    np.array([[1.0, 0.0], [0.0, -1.0]]),\r\n+]\r\n+s_to_pauli = {\r\n+    \"I\": pauli_list[0],\r\n+    \"X\": pauli_list[1],\r\n+    \"Y\": pauli_list[2],\r\n+    \"Z\": pauli_list[3],\r\n+}\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1665387748038,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -12,5 +12,30 @@\n     \"I\": pauli_list[0],\r\n     \"X\": pauli_list[1],\r\n     \"Y\": pauli_list[2],\r\n     \"Z\": pauli_list[3],\r\n-}\n\\ No newline at end of file\n+}\r\n+\r\n+\r\n+def channel(N,qc):\r\n+    '''create an N qubit GHZ state '''\r\n+    qc.h(0)\r\n+    if N>=2: qc.cx(0,1)\r\n+    if N>=3: qc.cx(0,2)\r\n+    if N>=4: qc.cx(1,3)\r\n+    if N>4: raise NotImplementedError(f\"{N} not implemented!\")\r\n+\r\n+    \r\n+def bitGateMap(qc,g,qi):\r\n+    '''Map X/Y/Z string to qiskit ops'''\r\n+    if g==\"X\":\r\n+        qc.h(qi)\r\n+    elif g==\"Y\":\r\n+        qc.sdg(qi)\r\n+        qc.h(qi)\r\n+    elif g==\"Z\":\r\n+        pass\r\n+    else:\r\n+        raise NotImplementedError(f\"Unknown gate {g}\")\r\n+def Minv(N,X):\r\n+    '''inverse shadow channel'''\r\n+    return ((2**N+1.))*X - np.eye(2**N)\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1665387767714,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -37,5 +37,10 @@\n     else:\r\n         raise NotImplementedError(f\"Unknown gate {g}\")\r\n def Minv(N,X):\r\n     '''inverse shadow channel'''\r\n-    return ((2**N+1.))*X - np.eye(2**N)\n\\ No newline at end of file\n+    return ((2**N+1.))*X - np.eye(2**N)\r\n+\r\n+\r\n+qc = qiskit.QuantumCircuit(3)\r\n+channel(3,qc)\r\n+qc.draw(output='mpl')\r\n"
+                },
+                {
+                    "date": 1665387864244,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -43,4 +43,5 @@\n \r\n qc = qiskit.QuantumCircuit(3)\r\n channel(3,qc)\r\n qc.draw(output='mpl')\r\n+plt.show()\r\n"
+                },
+                {
+                    "date": 1665387900007,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -43,5 +43,22 @@\n \r\n qc = qiskit.QuantumCircuit(3)\r\n channel(3,qc)\r\n qc.draw(output='mpl')\r\n-plt.show()\r\n+#plt.show()\r\n+\r\n+# \r\n+nShadows = 100\r\n+reps = 1\r\n+N = 2\r\n+rng = np.random.default_rng(1717)\r\n+cliffords = [qiskit.quantum_info.random_clifford(N, seed=rng) for _ in range(nShadows)]\r\n+\r\n+qc = qiskit.QuantumCircuit(N)\r\n+channel(N,qc)\r\n+\r\n+results = []\r\n+for cliff in cliffords:\r\n+    qc_c  = qc.compose(cliff.to_circuit())\r\n+\r\n+    counts = qiskit.quantum_info.Statevector(qc_c).sample_counts(reps)\r\n+    results.append(counts)\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1665387913248,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -45,9 +45,9 @@\n channel(3,qc)\r\n qc.draw(output='mpl')\r\n #plt.show()\r\n \r\n-# \r\n+# traditional state tomography\r\n nShadows = 100\r\n reps = 1\r\n N = 2\r\n rng = np.random.default_rng(1717)\r\n"
+                },
+                {
+                    "date": 1665387926996,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -60,5 +60,7 @@\n for cliff in cliffords:\r\n     qc_c  = qc.compose(cliff.to_circuit())\r\n \r\n     counts = qiskit.quantum_info.Statevector(qc_c).sample_counts(reps)\r\n-    results.append(counts)\n\\ No newline at end of file\n+    results.append(counts)\r\n+\r\n+# \n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1665387943059,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -62,5 +62,5 @@\n \r\n     counts = qiskit.quantum_info.Statevector(qc_c).sample_counts(reps)\r\n     results.append(counts)\r\n \r\n-# \n\\ No newline at end of file\n+# construct the shadow directly (forming a full density matrix)\r\n"
+                },
+                {
+                    "date": 1665387954184,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -63,4 +63,12 @@\n     counts = qiskit.quantum_info.Statevector(qc_c).sample_counts(reps)\r\n     results.append(counts)\r\n \r\n # construct the shadow directly (forming a full density matrix)\r\n+shadows = []\r\n+for cliff, res in zip(cliffords, results):\r\n+    mat    = cliff.adjoint().to_matrix()\r\n+    for bit,count in res.items():\r\n+        Ub = mat[:,int(bit,2)] # this is Udag|b>\r\n+        shadows.append(Minv(N,np.outer(Ub,Ub.conj()))*count)\r\n+\r\n+rho_shadow = np.sum(shadows,axis=0)/(nShadows*reps)\r\n"
+                },
+                {
+                    "date": 1665387973076,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -71,4 +71,22 @@\n         Ub = mat[:,int(bit,2)] # this is Udag|b>\r\n         shadows.append(Minv(N,np.outer(Ub,Ub.conj()))*count)\r\n \r\n rho_shadow = np.sum(shadows,axis=0)/(nShadows*reps)\r\n+\r\n+rho_actual = qiskit.quantum_info.DensityMatrix(qc).data\r\n+\r\n+\r\n+plt.subplot(121)\r\n+plt.suptitle(\"Correct\")\r\n+plt.imshow(rho_actual.real,vmax=0.7,vmin=-0.7)\r\n+plt.subplot(122)\r\n+plt.imshow(rho_actual.imag,vmax=0.7,vmin=-0.7)\r\n+plt.show()\r\n+print(\"---\")\r\n+\r\n+plt.subplot(121)\r\n+plt.suptitle(\"Shadow(Full Clifford)\")\r\n+plt.imshow(rho_shadow.real,vmax=0.7,vmin=-0.7)\r\n+plt.subplot(122)\r\n+plt.imshow(rho_shadow.imag,vmax=0.7,vmin=-0.7)\r\n+plt.show()\n\\ No newline at end of file\n"
+                },
+                {
+                    "date": 1665388207118,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -80,13 +80,14 @@\n plt.suptitle(\"Correct\")\r\n plt.imshow(rho_actual.real,vmax=0.7,vmin=-0.7)\r\n plt.subplot(122)\r\n plt.imshow(rho_actual.imag,vmax=0.7,vmin=-0.7)\r\n-plt.show()\r\n-print(\"---\")\r\n+#plt.show()\r\n+#print(\"---\")\r\n \r\n plt.subplot(121)\r\n plt.suptitle(\"Shadow(Full Clifford)\")\r\n plt.imshow(rho_shadow.real,vmax=0.7,vmin=-0.7)\r\n plt.subplot(122)\r\n\\ No newline at end of file\n plt.imshow(rho_shadow.imag,vmax=0.7,vmin=-0.7)\r\n-plt.show()\n+#plt.show()\r\n+\r\n"
+                },
+                {
+                    "date": 1665388212282,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -89,4 +89,6 @@\n plt.imshow(rho_shadow.real,vmax=0.7,vmin=-0.7)\r\n plt.subplot(122)\r\n plt.imshow(rho_shadow.imag,vmax=0.7,vmin=-0.7)\r\n #plt.show()\r\n+\r\n+qiskit.visualization.state_visualization.plot_state_city(rho_actual,title=\"Correct\")\n\\ No newline at end of file\n"
+                }
+            ],
+            "date": 1665387681109,
+            "name": "Commit-0",
+            "content": "import numpy as np\r\nimport matplotlib.pyplot as plt\r\nimport qiskit"
+        }
+    ]
+}
