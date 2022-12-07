@@ -3,7 +3,7 @@
     "activeCommit": 0,
     "commits": [
         {
-            "activePatchIndex": 1,
+            "activePatchIndex": 2,
             "patches": [
                 {
                     "date": 1670329911677,
@@ -12,6 +12,10 @@
                 {
                     "date": 1670330122355,
                     "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,3 +1,3 @@\n # Quetzal\r\n-**Note:** This project is still under development, once the test is done, we will update codes and add some tutorials.\r\n+**Note$^*$: This project is still under development, once the test is done, we will update codes and add some tutorials.**\r\n Quetzal is a general framework for quantum circuit cutting.\r\n"
+                },
+                {
+                    "date": 1670387107979,
+                    "content": "Index: \n===================================================================\n--- \n+++ \n@@ -1,3 +1,3 @@\n # Quetzal\r\n-**Note$^*$: This project is still under development, once the test is done, we will update codes and add some tutorials.**\r\n+**Note$^*$: This project is still under development, once the test is done, the codes will updated and tutorials will be added.**\r\n Quetzal is a general framework for quantum circuit cutting.\r\n"
                 }
             ],
             "date": 1670329911677,
