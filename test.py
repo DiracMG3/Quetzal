@@ -15,7 +15,7 @@ simulation_backend = "qasm_simulator"
 num_shots = 10**6 # number of shots
 cut_constraint = {"max_size_fragments": 10, 
                   "min_qubits": 2,
-                  "max_qubits": 15,
+                  "max_qubits": 20,
                   "depth": 100,
                 }
 
@@ -24,14 +24,14 @@ cut_constraint = {"max_size_fragments": 10,
 # test a circuit cutting task
 ##########################################################################################
 #circuit, cuts = build_circuit_with_cuts(circuit_type, layers, qubits, frag_num, seed)
-circ = random_circuit(20, 3, max_operands=2, seed = 23)
+circ = random_circuit(25, 3, max_operands=2, seed = 23)
 circ = circ.decompose()
 circ1 = QFT(14, approximation_degree=11, do_swaps=False)
 circ1 = circ1.decompose()
 #circ1.draw('mpl')
 #plt.show()
 #cuts = [(Qubit(QuantumRegister(5, 'q'), 2),2),(Qubit(QuantumRegister(5, 'q'), 3),3)]
-cuts = kahypar_cut(circ, 7, 0.88)
+cuts = kahypar_cut(circ, 7, 0.64)
 #print(cuts)
 #print('len of cuts:')
 #print(len(cuts))

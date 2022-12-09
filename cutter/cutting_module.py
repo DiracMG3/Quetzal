@@ -10,11 +10,6 @@ import retworkx as rx
 import copy
 import time
 import numpy as np
-from pymoo.core.problem import ElementwiseProblem
-from pymoo.core.variable import Real, Integer
-from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.core.mixed import MixedVariableMating, MixedVariableSampling, MixedVariableDuplicateElimination
-from pymoo.optimize import minimize
 
 
 ##########################################################################################
@@ -150,16 +145,6 @@ class Cut_Solver():
         self.cutter = cutter
 
         self.problem = Optimal_Cut(circuit, shots, cut_constraint, cutter)
-        self.algorithm = NSGA2(pop_size=20,
-                  sampling=MixedVariableSampling(),
-                  mating=MixedVariableMating(eliminate_duplicates=MixedVariableDuplicateElimination()),
-                  eliminate_duplicates=MixedVariableDuplicateElimination(),
-                  )
-        self.result = minimize(self.problem, 
-                            self.algorithm,
-                            ('n_gen', 200),
-                            seed=1,
-                            verbose=False)
 
     
 
