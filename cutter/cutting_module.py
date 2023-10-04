@@ -2,14 +2,16 @@ from qiskit import *
 from processor.processing_module import *
 from processor.recombination_model import *
 from cutter.kahypar_cutter import kahypar_cut
+from optimizer.synthesis_module import synthesis
 from qiskit.dagcircuit import DAGCircuit,DAGNode
 from qiskit.circuit import Qubit, Clbit, AncillaQubit
 from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit.dagcircuit import DAGOpNode, DAGInNode, DAGOutNode
 import retworkx as rx
-import copy
-import time
+import copy, sys
+import time, multiprocessing
 import numpy as np
+import psutil, os
 
 
 ##########################################################################################
@@ -21,87 +23,146 @@ import numpy as np
 class Circuit_Cutting_Task():
     '''
     The complete circuit cutting workflow module, which includes:
+    - find optimal cut 
+    - cut the circuit
+    - run subcircuits and collect data
+    - reconstruct the full circuit outcome probability
 
     '''
-    def __init__(self, circuit, cuts, shots, backend, reconstruct_method = "direct"):
+    def __init__(self, circuit, cut_constraint, shots, backend, reconstruct_method = "direct"):
         self.circuit = circuit
-        self.cuts = cuts
         self.shots = shots
+        self.cut_constraint = cut_constraint
         self.backend = backend
         self.reconstruct_method = reconstruct_method
         self.full_circuit_dist = {}
-        # list of all possible measurement outcomes (bitstrings)
-        self.all_bits = [ "".join(bits) for bits in itertools.product(["0","1"],
-                            repeat = len(self.circuit.qubits)) ]
+        self.limited_qubits = 30
+        
+        '''
+        self.find_optimal_cut()
+        if len(self.circuit.qubits) <= self.limited_qubits:
+            self.statevector_simulation()
+        self.cut_procedure()
+        self.circuit_synthesis()
+        self.reconstruct_procedure()
+        self.full_circuit_simulation()
+        self.compute_fidelity()
+        self.print_results()
+        '''
+
+        
+            
+    def find_optimal_cut(self):
+        '''
+        find optimal cut by solving the Multi-Objective Optimization problem
+        '''
+        print("寻找最优切割策略")
+        problem = Optimal_Cut(self.circuit, self.shots,self.cut_constraint,"kahypar")
+        optimal_cut = problem.optimal_cut
+        self.cuts = kahypar_cut(self.circuit, optimal_cut[0], optimal_cut[1])
+        print("完成！")
+        print("最优切割点为：")
+        print(self.cuts)
+        print()
+
+
+    def statevector_simulation(self):
+        '''
+        compute the actual state probability distribution for the full circuit
+        '''
+        print('~~完整线路精确结果计算~~')
+        start = time.time()
+        #print(u'当前进程的内存使用：%.4f GB' % (psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024) )
         # get the actual state / probability distribution for the full circuit
-        self.actual_state = get_statevector(circuit)
+        self.actual_state = get_statevector(self.circuit)
+        end = time.time()
+        used_time = end - start
+        #print("state vector模拟耗时: ", used_time)
+        #print(u'当前进程的内存使用：%.4f GB' % (psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024) )
+        # use generator expression to iterate all possible measurement outcomes (bitstrings), so ->
+        # -> all_bits = ( "".join(bits) for bits in itertools.product(["0","1"], repeat = len(self.circuit.qubits)) )
+        start = time.time()
         self.actual_dist = { "".join(bits) : abs(amp)**2
-                for bits, amp in zip(self.all_bits, self.actual_state)
+                for bits, amp in zip( ( "".join(bits) for bits in itertools.product(["0","1"],
+                            repeat = len(self.circuit.qubits)) ) , self.actual_state)
                 if amp != 0 }
-        if is_valid_cut(self.circuit,self.cuts,self.shots):
-            self.cut_procedure()
-            self.reconstruct_procedure()
-            self.full_circuit_simulation()
-            self.print_results()
-
-
-    def fidelity(self, dist):
-        '''
-        compute the fidelity between two quantum state
-        '''
-        fidelity = sum( numpy.sqrt(self.actual_dist[bits] * dist[bits], dtype = complex)
-                    for bits in self.all_bits
-                    if self.actual_dist.get(bits) and dist.get(bits) )**2
-        return fidelity.real if fidelity.imag == 0 else fidelity
+        #print(u'当前进程的内存使用：%.4f GB' % (psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024) )
+        end = time.time()
+        used_time = end - start
+        #print("计算 actual_dist 耗时: ", used_time)
+        #print(u'当前进程的内存使用：%.4f GB' % (psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024 / 1024) )
+        print('完成！')
+        print()
 
     def full_circuit_simulation(self):
         '''
         compute a simulated probability distribution for the full circuit
         '''
-        print('~~Full circuit simulation~~')
+        print('~~使用MPS模拟器运行未切割完整线路~~')
         self.circuit.measure_all()
-        full_circuit_result = run_circuits(self.circuit, self.shots, backend = "qasm_simulator")
+        start = time.time()
+        full_circuit_result = run_circuits(self.circuit, self.shots, backend = "aer_simulator_matrix_product_state")
+        end = time.time()
+        used_time = end -start
+        #print("原始线路运行耗时: ", used_time)
+        start = time.time()
         for part in full_circuit_result:
             for bits, counts in part.get_counts(self.circuit).items():
                 if bits not in self.full_circuit_dist:
                     self.full_circuit_dist[bits] = 0
                 self.full_circuit_dist[bits] += counts / self.shots
-        
-        self.full_circuit_fidelity = self.fidelity(self.full_circuit_dist)
-        print('Done!')
+        end = time.time()
+        used_time = end -start
+        #print("统计原始线路结果耗时: ", used_time)
+        start = time.time()
+        #self.full_circuit_fidelity = fidelity(self.actual_dist, self.full_circuit_dist)
+        end = time.time()
+        used_time = end -start
+        #print("原始线路保真度计算耗时: ", used_time)
+        print('完成！')
         print()
 
-    def cut_procedure(self):
+    def cut_procedure(self, verbose = True):
         '''
-        cut a circuit into subcircuits, run each subcircuit and collect the corresponding data
+        cut a circuit into subcircuits
         '''
-        if len(self.circuit.qubits) <= 10:
+        if len(self.circuit.qubits) <= 10 and verbose:
             print('Full circuit:')
             print()
             print(self.circuit)
             print()
-        print('~~Cutting the circuit~~')
+        print('~~线路切割程序~')
         self.subcircuits, self.qubit_map, self.stitches = cut_circuit(self.circuit, self.cuts, self.shots)
-        print('Done!')
+        print('完成！')
+        print()
         self.bit_permutation = bit_axis_permutation(self.subcircuits, self.qubit_map)
+        print('实际比特顺序：')
         print(self.bit_permutation)
-        if all(len(subcircuit.circuit.qubits) <= 10 for subcircuit in self.subcircuits):
+        if all(len(subcircuit.circuit.qubits) <= 5 for subcircuit in self.subcircuits) and verbose:
             for idx,subcircuit in enumerate(self.subcircuits):
                 print(f'subcircuit {str(idx)}:')
                 print(subcircuit.circuit)
                 print()
-        print('~~Running subcircuits and collecting data~~')
-        self.subcircuit_data = collect_subcircuit_data(self.subcircuits, backend = self.backend)
-        print('Done!')
-        print() 
+        print()
+        
+    def circuit_synthesis(self):
+        '''
+        Subcircuits optimizaiton and compilation after running.
+        '''
+        for subcircuit in self.subcircuits:
+            subcircuit.synthesized_circuit = synthesis(subcircuit.circuit)
 
     def reconstruct_procedure(self):
         '''
-        reconstruct the choi matrix of each subcircuit by a variety of methods, then recombine
-        the probability distribution of full circuit
+        run each subcircuit and collect the corresponding data, reconstruct the choi matrix of each subcircuit by a variety of methods,
+        then recombine the probability distribution of full circuit
         '''
-        print('~~Reconstructing the circuit~~')
-        print('Using the method of "'+str(self.reconstruct_method)+'"')
+        print('~~运行子线路并储存结果~~')
+        self.subcircuit_data = collect_subcircuit_data(self.subcircuits, backend = self.backend)
+        print('完成！')
+        print() 
+        print('~~线路结果重构~~')
+        #print('Using the method of "'+str(self.reconstruct_method)+'"')
         if self.reconstruct_method == "direct":
             self.choi_matrix = direct_circuit_model(self.subcircuit_data)
         elif self.reconstruct_method == "MLFT":
@@ -112,41 +173,51 @@ class Circuit_Cutting_Task():
         #  1. tensor-network-based method by default (method = "network")
         #  2. insert a complete basis of operators (method = "insertion")
         start = time.time()
-        self.prob_distribution = recombine_circuit_models(self.choi_matrix, self.stitches, 
+        self.cut_circuit_dist = recombine_circuit_models(self.choi_matrix, self.stitches, 
                                 self.bit_permutation, self.subcircuits)
         end = time.time()
         self.reconstruct_time = end - start
-        print('reconstruct time',self.reconstruct_time)
+        #print('重构所需时间：',self.reconstruct_time)
         #  if there are negative probabilities induced by noise, don't bother fitting
-        self.prob_distribution = naive_fix(self.prob_distribution)
+        start = time.time()
+        self.cut_circuit_dist = naive_fix(self.cut_circuit_dist)
+        end = time.time()
+        used_time = end -start
+        #print("修正概率分布耗时: ", used_time)
         #  compute the reconstruction fidelity
-        self.reconstruct_fidelity = self.fidelity(self.prob_distribution)
-        print('Done!')
+        start = time.time()
+        #self.reconstruct_fidelity = fidelity(self.actual_dist, self.cut_circuit_dist)
+        end = time.time()
+        used_time = end -start
+        #print("计算重构后保真度耗时: ", used_time)
+        print('完成！')
+        print()
+
+    def compute_fidelity(self):
+        '''
+        compute the fidelity of state result from circuit cutting and full circuit simulation
+        '''
+        print('~~计算输出线路保真度~~')
+        if len(self.circuit.qubits) <= self.limited_qubits:
+            self.reconstruct_fidelity = fidelity(self.actual_dist, self.cut_circuit_dist)
+            self.full_circuit_fidelity = fidelity(self.actual_dist, self.full_circuit_dist)
+        else:
+            self.circuit_fidelity = fidelity(self.full_circuit_dist, self.cut_circuit_dist)
+        print('完成！')
         print()
 
     def print_results(self):
         '''
         output the result
         '''
-        print('Results:')
-        print('reconstruction fidelity:', self.reconstruct_fidelity)
-        print('full circuit simulation fidelity:', self.full_circuit_fidelity)
+        print('线路结果：')
+        if len(self.circuit.qubits) <= self.limited_qubits:
+            print('线路切割结果保真度：', self.reconstruct_fidelity)
+            print('MPS模拟线路保真度：', self.full_circuit_fidelity)
+        else:
+            print('线路切割结果与MPS模拟器对比保真度：', self.circuit_fidelity)
         print()
 
-
-class Cut_Solver():
-    '''
-    Automatically find the optimal Cut Strategy, this module served as part of the circuit cutting workflow.
-    
-    '''
-    def __init__(self, circuit, shots, cut_constraint, cutter = "kahypar"):
-        self.circuit = circuit
-        self.shots = shots
-        self.cutter = cutter
-
-        self.problem = Optimal_Cut(circuit, shots, cut_constraint, cutter)
-
-    
 
 class Optimal_Cut():
     '''
@@ -165,7 +236,7 @@ class Optimal_Cut():
         - the maximum depth in one subcircuit
 
     Objectives:
-        - minimize the maximum number of cuts on one subcircuit
+        - minimize the maximum number of measurement variants(determined by cut points) on one subcircuit
         - minimize the total number of cuts
         - minimize qubit number imbalance of subcircuits
         - minimize depth imbalance of subcircuits
@@ -194,6 +265,11 @@ class Optimal_Cut():
         self.cutter = cutter
         self.results = {}
         self._sampling()
+        if self.results:
+            self.optimal_cut = self._find_optimal_cut()
+        else:
+            print("No Solution!")
+            sys.exit()
 
     def _evaluate(self, num_fragments, epsilon):
         '''
@@ -231,7 +307,7 @@ class Optimal_Cut():
             return []
         
         # Objective Functions
-        # f1 : the maximum number of cuts on one subcircuit
+        # f1 : the maximum number of measurement variants(determined by cut points) on one subcircuit
         # f2 : the total number of cuts
         # f3 : qubit number imbalance of subcircuits
         # f4 : operation number imbalance of subcircuits
@@ -255,6 +331,26 @@ class Optimal_Cut():
                 if self._evaluate(num_frags,eps):
                     self.results[(num_frags,eps)] = self._evaluate(num_frags,eps)
 
+    def _find_optimal_cut(self):
+        '''
+        find optimal cut among all candidates by finding the minimal cost value of Objective Functions
+        f1, f2, f3, f4, f5 weighted by 0.3, 0.3, 1, 1, 1
+        '''
+        optimal_cut = next(iter(self.results))
+        def _cost_value(obf):
+            cost = obf[0]*0.1 + obf[1]*0.1 + obf[2] + obf[3] + obf[4]
+            return cost
+        # initialize a cost value
+        min_cost = _cost_value(self.results.get(next(iter(self.results))))
+        for key, value in self.results.items():
+            cost = _cost_value(value)
+            if cost < min_cost:
+                min_cost = cost
+                optimal_cut = key
+        return optimal_cut
+        
+
+            
        
 
 
@@ -262,16 +358,25 @@ class Optimal_Cut():
 # functions for cutting and checking a quantum circuit
 ##########################################################################################
 
-def is_valid_cut(circuit, cuts, shots):
+def fidelity(full_simulate_dist, cut_dist):
     '''
-        check if the cut is valid. For the case of inner prep/meas qubits on one subcircuit, which means
-        we need to do intermediate measurement and qubit reset operations, our reconstruction procedure
-        will collapse up to now. we use valid `bit_permutation` list to check it. More general implementation
-        may update in the future.
-        '''
+    compute the fidelity between two quantum state.
+    '''
+    fidelity = sum( numpy.sqrt(full_simulate_dist[bits] * cut_dist[bits], dtype = complex)
+                for bits in ( set(full_simulate_dist.keys()) & set(cut_dist.keys()) ) )**2
+    return fidelity.real if fidelity.imag == 0 else fidelity
+
+def is_valid_cut(circuit, cuts, shots, verbose=False):
+    '''
+    check if the cut is valid. For the case of inner prep/meas qubits on one subcircuit, which means
+    we need to do intermediate measurement and qubit reset operations, our reconstruction procedure
+    will collapse up to now. we use valid `bit_permutation` list to check it. More general implementation
+    may update in the future.
+    '''
     subcircuits, _, _, = cut_circuit(circuit, cuts, shots)
     if not subcircuits:
-        print("Invalid Cut!")
+        if verbose:
+            print("Invalid Cut!")
         return False
     return True
 

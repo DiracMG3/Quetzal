@@ -1,5 +1,6 @@
 import numpy, scipy , tensornetwork
 from processor.processing_module import *
+import multiprocessing
 
 
 ########################################################################################################
@@ -52,6 +53,7 @@ def direct_circuit_model(tomography_data, discard_poor_data = False, rank_cutoff
         state_matrix = numpy.array([ target_labels_to_matrix(states).flatten()
                                      for states in prep_meas_states ])
         state_counts = numpy.array(list(state_counts))
+
 
         # TODO: add count-adjusted weights to fitting procedure
         choi_fit = scipy.linalg.lstsq(state_matrix.conj(), state_counts, cond = rank_cutoff)[0]
@@ -124,7 +126,6 @@ def _recombine_using_insertions(frag_models, stitches, bit_permutation, fragment
     recombine subcircuits data by inserting a complete basis of operators
     '''
     frag_num = len(frag_models)
-    print(bit_permutation)
     # identify permutation to apply to recombined fragment output
     final_bit_pieces = [ list(choi.keys()) for choi in frag_models ]
 
@@ -169,19 +170,21 @@ def _recombine_using_insertions(frag_models, stitches, bit_permutation, fragment
 
     return combined_dist
 
+
 def _recombine_using_networks(frag_models, stitches, bit_permutation, fragments):
     '''
     recombine subcircuits data by building and contracting tensor networks
     '''
     frag_num = len(frag_models)
-    print(bit_permutation)
     # identify permutation to apply to recombined fragment output
     final_bit_pieces = [ list(choi.keys()) for choi in frag_models ]
+    #print("比特切片（循环）总长度：")
+    #print(len(list(itertools.product(*final_bit_pieces))))
 
     combined_dist = {}
     for frag_bits in itertools.product(*final_bit_pieces):
         joined_bits = "".join(frag_bits)
-        permuted_bits = "".join([ joined_bits[bit_permutation.index(order)] 
+        permuted_bits = "".join([ joined_bits[bit_permutation.index(order)]
                             for order in range(len(bit_permutation)) ])
         final_bits = "".join(permuted_bits[::-1])
         nodes = {}
@@ -218,11 +221,13 @@ def _recombine_using_networks(frag_models, stitches, bit_permutation, fragments)
             combined_dist[final_bits] += val
         except:
             combined_dist[final_bits] = val
-
+   
     return combined_dist
 
+
 def recombine_circuit_models(*args, method = "network", **kwargs):
-    print('recombining')
+    print()
+    print('recombining...')
     if method == "network":
         recombination_method = _recombine_using_networks
     elif method == "insertion":

@@ -38,6 +38,7 @@ class SubCircuit():
     '''
     def __init__(self, circuit, sub_id, prep_qubits, meas_qubits, shots):
         self.circuit = circuit
+        self.synthesized_circuit = None
         self.sub_id = sub_id
         self.prep_qubits = prep_qubits
         self.meas_qubits = meas_qubits
@@ -127,9 +128,12 @@ def get_statevector(circuit):
 def run_circuits(circuits, shots, backend = "qasm_simulator",
                  max_hardware_shots = 8192, monitor_jobs = False):
     '''
-    run circuits and get the resulting probability distributions
-    '''
+    run circuits and get the resulting probability distributions.
 
+    Available backends:
+        QASM simulator: "qasm_simulator".
+        Matrix Product State simulator: "aer_simulator_matrix_product_state".
+    '''
     # get results from a single run
     def _results(shots, backend):
         tomo_job = qiskit.execute(circuits, backend = backend, shots = shots)
@@ -220,7 +224,7 @@ def organize_tomography_data(raw_data_collection, prep_qubits, meas_qubits, prep
     '''
     organize raw tomography data into a dictionary of dictionaries.
 
-    mapping:
+    Mapping:
         bitstrings on the "final" qubits
         --> prepared / measured state labels
         --> observed counts
